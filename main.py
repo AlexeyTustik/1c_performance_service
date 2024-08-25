@@ -126,7 +126,7 @@ def log_file_to_csv_gzip_bytes(file_name: str):
 
 def append_to_dict(D_params, lparams):
     for params in lparams:
-        new_param = params[0].lower()
+        new_param = params[0].replace(':', '_').lower()
         if new_param in D_params:
             new_value = params[1].replace("'","").replace("''", "").replace('"',"").replace('-#-', '\n').strip()
             D_params[new_param] = new_value
@@ -161,7 +161,7 @@ def primary_keys_to_query():
     return ', '.join(PRIMARY_KEYS)
 
 def db_fields_to_query():
-    key_list = [key + ' ' + value for key, value in DB_FIELDS.items()]
+    key_list = [key.lower() + ' ' + value for key, value in DB_FIELDS.items()]
     return ', '.join(key_list)
 
 def db_create_query(base_name):
@@ -207,8 +207,9 @@ DB_FIELDS = {
     'dumperror': 'String',
     't_applicationname': 'String',
     't_connectid': 'String',
+    't_clientid': 'String',
     'event_name' : 'String',
-    'DataBase' : 'String',
+    'database' : 'String',
     'plansqltext' : 'String',
     'context' : 'String',
     'usr' : 'String',
@@ -222,6 +223,7 @@ DB_FIELDS = {
     'p_processname' : 'String',
     'sql' : 'String',
     't_clientid': 'String',
+    't_computername': 'String',
     'trans': 'Nullable(Bool)',
     'error': 'String',
     'regions': 'String',
@@ -231,7 +233,8 @@ DB_FIELDS = {
     'clusterid' : 'String',
     'ruleid': 'String',
     'txt': 'String',
-    'prm': 'String'
+    'prm': 'String',
+    'locks': 'String'
 }
 
 PRIMARY_KEYS = ('time', 'event_name')
