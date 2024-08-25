@@ -1,0 +1,11 @@
+;Укажите пути к папке с Техжурналом и настройки clickhouse. Переименуйте файл в config.ini
+
+[VOLUMES]
+TECH_JOURNAL_PATH = tj_path
+
+[CLICKHOUSE]
+BASE_NAME = tj_data
+CLICKHOUSE_HOST = clickhouseserver
+CLICKHOUSE_PORT = 8123
+CLICKHOUSE_USER = default
+CLICKHOUSE_PASSWORD = 
