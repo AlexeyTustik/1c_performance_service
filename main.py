@@ -9,8 +9,14 @@ import csv
 import gzip
 import io
 import configparser
+import time
 
 def start():
+
+    check_system_folder()
+    check_processed()
+    check_logs()
+
     conn = http.client.HTTPConnection(host=CLICKHOUSE_HOST, port=CLICKHOUSE_PORT)
     conn.request('GET', '/ping')
 
@@ -21,12 +27,22 @@ def start():
     create_database(CLICKHOUSE_HOST, CLICKHOUSE_PORT, BASE_NAME)
 
     conn.close()
-    check_processed() # В processed храним информацию о файлах
-
+    
     while True:
         files = glob.glob(FILE_PATTERN, recursive=True)
         for file in files:
             process_file(file)
+        time.sleep(30)
+
+def create_directoty(directory_path):
+    if not os.path.exists(directory_path):
+        os.mkdir(directory_path)
+
+def check_logs():
+    create_directoty(LOG_PATH)
+
+def check_system_folder():
+    create_directoty(SYS_PATH)
 
 def process_file(file):
     file_hash = get_hash_file(file)
@@ -34,25 +50,24 @@ def process_file(file):
     if os.path.exists(hash_file_name):
         return
 
-    data = parse_logfile(file)
-    data_csv = data_to_csv_string(data)
-    data_encoded = data_to_gzip_csv_string(data_csv)
-    conn = http.client.HTTPConnection(host=CLICKHOUSE_HOST, port=CLICKHOUSE_PORT)
-    query_data = {'query': INSERT_QUERY, 'format_csv_delimiter': '|'}
-    query = urllib.parse.urlencode(query_data)
+    for data in parse_logfile(file):
+        data_csv = data_to_csv_string(data)
+        data_encoded = data_to_gzip_csv_string(data_csv)
+        conn = http.client.HTTPConnection(host=CLICKHOUSE_HOST, port=CLICKHOUSE_PORT)
+        query_data = {'query': INSERT_QUERY, 'format_csv_delimiter': '|'}
+        query = urllib.parse.urlencode(query_data)
 
-    headers = login_headers()
-    headers.update({'Content-Encoding': 'gzip'})
+        headers = login_headers()
+        headers.update({'Content-Encoding': 'gzip'})
 
-    conn.request('POST', '/?' + query , headers=headers, body=data_encoded)
-    response = conn.getresponse()
+        conn.request('POST', '/?' + query , headers=headers, body=data_encoded)
+        response = conn.getresponse()
 
-    if response.status != 200:
-        return
+        if response.status != 200:
+            return
 
     processed_file = open(hash_file_name, 'w+')
     processed_file.close()
-
 
 def get_hash_file(file):
     '''Получаем хеш файла, при чтении важно знать был он изменен или нет,
@@ -69,8 +84,7 @@ def get_hash_file(file):
 
 
 def check_processed():
-    if not os.path.exists(IMPORTED_PATH):
-        os.mkdir(IMPORTED_PATH)
+    create_directoty(IMPORTED_PATH)
 
 def login_headers():
     return {'X-ClickHouse-user': CLICKHOUSE_USER, 'X-ClickHouse-Key': CLICKHOUSE_PASSWORD}
@@ -108,6 +122,9 @@ def parse_logfile(file_name: str):
                     str_log = str_log.replace("''", '')
                     data = process_tj_record(str_log, file_name)
                     records.append(data)
+                    if len(records) == 100_000:
+                        yield records
+                        records = []
                 str_log = str
             else:
                 str_log = '-#-'.join((str_log, str))
@@ -115,7 +132,7 @@ def parse_logfile(file_name: str):
             data = process_tj_record(str_log, file_name)
             records.append(data)
 
-    return records
+    yield records
     
 def log_file_to_csv_gzip_bytes(file_name: str):
     records = parse_logfile(file_name=file_name)
@@ -185,7 +202,6 @@ __FILE_NAME_PATTERN = r'(\d{2})(\d{2})(\d{2})(\d{2})' # Файл содержи�
 DB_FIELDS = {
     'time' : 'DateTime64(6)',
     'duration' : 'Nullable(UInt16)',
-    'durationus' : 'Nullable(UInt16)',
     'exception': 'String',
     'dbcopy': 'String',
     'name': "String",
@@ -234,7 +250,8 @@ DB_FIELDS = {
     'ruleid': 'String',
     'txt': 'String',
     'prm': 'String',
-    'locks': 'String'
+    'locks': 'String',
+    'tablename': 'String'
 }
 
 PRIMARY_KEYS = ('time', 'event_name')
@@ -243,13 +260,15 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 TECH_JOURNAL_PATH = config['VOLUMES']['TECH_JOURNAL_PATH']
+SYS_PATH = config['VOLUMES']['SYS_PATH']
 BASE_NAME = config['CLICKHOUSE']['BASE_NAME']
 CLICKHOUSE_HOST = config['CLICKHOUSE']['CLICKHOUSE_HOST']
 CLICKHOUSE_PORT = int(config['CLICKHOUSE']['CLICKHOUSE_PORT'])
 CLICKHOUSE_USER = config['CLICKHOUSE']['CLICKHOUSE_USER']
 CLICKHOUSE_PASSWORD = config['CLICKHOUSE']['CLICKHOUSE_PASSWORD']
 
-IMPORTED_PATH = os.path.join(TECH_JOURNAL_PATH, '.processed') # Служебная папка, в которой помечается что файл обработан. В имя пишется его хэш-функция
+IMPORTED_PATH = os.path.join(SYS_PATH, 'processed') # Служебная папка, в которой помечается что файл обработан. В имя пишется его хэш-функция
+LOG_PATH = os.path.join(SYS_PATH, 'logs')
 FILE_PATTERN = os.path.join(TECH_JOURNAL_PATH, '*', '*.log')
 INSERT_QUERY = f'INSERT INTO {BASE_NAME} FORMAT CSV'
 

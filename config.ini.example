@@ -2,6 +2,7 @@
 
 [VOLUMES]
 TECH_JOURNAL_PATH = tj_path
+SYS_PATH = sys_path ; Хранение системной информации (логи, обработанные файлы)
 
 [CLICKHOUSE]
 BASE_NAME = tj_data
