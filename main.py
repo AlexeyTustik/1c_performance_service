@@ -189,7 +189,7 @@ def db_create_query(base_name):
     (
     {db_fields_to_query()}
     )
-    ENGINE = MergeTree
+    ENGINE = ReplacingMergeTree()
     ORDER BY ({primary_keys_to_query()})
     PRIMARY KEY(
     {primary_keys_to_query()})
