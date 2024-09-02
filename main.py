@@ -45,7 +45,10 @@ def check_system_folder():
     create_directoty(SYS_PATH)
 
 def process_file(file):
-    file_hash = get_hash_file(file)
+    try:
+        file_hash = get_hash_file(file)
+    except FileNotFoundError: # File could be deleted
+        return
     hash_file_name = os.path.join(IMPORTED_PATH, file_hash)
     if os.path.exists(hash_file_name):
         return
@@ -186,9 +189,11 @@ def db_create_query(base_name):
     (
     {db_fields_to_query()}
     )
+    ENGINE = MergeTree
+    ORDER BY ({primary_keys_to_query()})
     PRIMARY KEY(
-    {primary_keys_to_query()}
-    )
+    {primary_keys_to_query()})
+    ;
     '''
 
 __RE_PATTERNS = (",(\w+)='([^']+)",
