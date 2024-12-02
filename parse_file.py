@@ -10,9 +10,6 @@ import glob
 class TechJournalBase:
     start_record_pattern = re.compile(r'(\d{2}):(\d{2}).(\d{6})-(\d+),(\w+)')
     file_name_pattern = re.compile(r'(\d{2})(\d{2})(\d{2})(\d{2})\.log')
-    parameters_patterns = (",([A-Za-z0-9:]+)='([^']+)(?<!')'",
-                        ',([A-Za-z0-9:]+)="([^"]+)(?<!")"',
-                        ',([A-Za-z0-9:]+)=([^,]+)')
     parameters_patterns =[re.compile(x) for x in (",([A-Za-z0-9:]+)='([^']+?(?:''[^']*)*)'",
                            ',([A-Za-z0-9:]+)="([^"]+?(?:""[^"]*)*)"',
                            ',([A-Za-z0-9:]+)=([^,]+)' )]    
@@ -84,7 +81,8 @@ class ClickHouseBase:
     'inbytes': 'Nullable(Int64)',
     'outbytes': 'Nullable(Int64)',
     'cputime': 'Nullable(Int64)',
-    'process': 'String'
+    'process': 'String',
+    'result': 'String'
     }
     primary_keys = ('time', 'event_name')
 
@@ -95,16 +93,14 @@ class TechJournalReader(TechJournalBase):
 
     def read_tech_journal(self):
         with open(file=self.file_name, mode='r', encoding='utf-8-sig') as file:
-            log_line = ''
+            log_lines = []
             for line in file:
-                if not line:
-                    continue
                 if self.check_start_log(line):
-                    if log_line: yield log_line.strip()
-                    log_line = line
+                    if log_lines: yield ''.join(log_lines).rstrip()
+                    log_lines = [line]
                 else:
-                    log_line = ''.join((log_line, line))
-            if log_line: yield log_line.strip()
+                    log_lines.append(line)
+            if log_lines: yield ''.join(log_lines).rstrip()
 
     def __str__(self):
         return f'TechJournalReader: {self.file_name}'
@@ -133,7 +129,7 @@ class TechJournalRecondParser(TechJournalBase, ClickHouseBase):
                 param_key = param[0].lower().replace(':', '_')
                 if param_key in ClickHouseBase.db_fields:
                     data[param_key] = param[1]
-            record_tmp = re.sub(pattern, '', record_tmp)    
+            record_tmp = re.sub(pattern, '', record_tmp) 
 
         event_time = datetime.datetime(year=int(f'20{year}'),
                                 month=int(month),
@@ -193,7 +189,6 @@ class ClickHouseConnector(ClickHouseBase):
         if response.status != 200:
             print(response.msg)
             print(response.headers)
-            print(response.body)
             return False
         return True
 
@@ -232,12 +227,18 @@ class BinaryCsvGzipWriter():
     def dict_to_csv_gzip(self, data):
         csv_string = self._data_to_csv_string(data)
         return self._csv_string_to_gzip(csv_string)   
-    
+
+class InsertQueryGenerator(ClickHouseBase):
+    def generate_sql(self, data):
+        buffer = io.StringIO();
+        writer = open(buffer)
+
 
 if __name__ == '__main__':
 
-    files = glob.glob('E:\Закупки_ТЖ_НТ_20092024\**\*.log',recursive=True)
-    connector = ClickHouseConnector('ubuntuserver', 8123, 'tj_data_zak', 'default', '123')
+    now = datetime.datetime.now()
+    files = glob.glob('E:\\Logi_29_11_2024\\**\\24112912.log',recursive=True)
+    connector = ClickHouseConnector('192.168.0.199', 8123, 'brif_29112024', 'default', 'Tystik1233')
     counter = 1
     for file in files:
         test_reader = TechJournalReader(file_name=file)
@@ -246,14 +247,14 @@ if __name__ == '__main__':
         result_data = []
         
         for record in test_reader.read_tech_journal():
-            now = datetime.datetime.now()
+            
             data = parser.process_tj_record(record=record)
             result_data.append(data)
             if len(result_data) == 10_000:
                 binary_data = GzipWriter.dict_to_csv_gzip(result_data)
                 connector.post_records(binary_data)
                 result_data = []
-                print(datetime.datetime.now() - now)
+                
 
         if result_data:
             binary_data = GzipWriter.dict_to_csv_gzip(result_data)
@@ -261,3 +262,4 @@ if __name__ == '__main__':
 
         print(counter,'/' ,len(files), file)
         counter=counter + 1
+    print(datetime.datetime.now() - now)
