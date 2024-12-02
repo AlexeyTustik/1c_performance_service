@@ -237,8 +237,8 @@ class InsertQueryGenerator(ClickHouseBase):
 if __name__ == '__main__':
 
     now = datetime.datetime.now()
-    files = glob.glob('E:\\Logi_29_11_2024\\**\\24112912.log',recursive=True)
-    connector = ClickHouseConnector('192.168.0.199', 8123, 'brif_29112024', 'default', 'Tystik1233')
+    files = glob.glob('E:\\Logi_29_11_2024\\**\\*.log',recursive=True)
+    connector = ClickHouseConnector('192.168.0.199', 8123, 'brif_29112024', 'user', 'password')
     counter = 1
     for file in files:
         test_reader = TechJournalReader(file_name=file)
